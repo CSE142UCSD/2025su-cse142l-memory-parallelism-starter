@@ -196,6 +196,7 @@ void matmul_forward(float* out,
 
     // collapse the B and T loops into one and turn it into a strided loop.
     // then we can tile the inner loop, and reuse the loaded weight LOOP_UNROLL many times
+    #pragma omp parallel for
     for (int obt = 0; obt < B * T; obt += LOOP_UNROLL) {
         for (int o = 0; o < OC; o++) {
             // we'll keep LOOP_UNROLL many results in registers
@@ -222,7 +223,7 @@ void matmul_forward(float* out,
         }
     }
 }
-
+#if 0
 void matmul_backward(float* dinp, float* dweight, float* dbias,
                      const float* dout, const float* inp, const float* weight,
                      int B, int T, int C, int OC) {
@@ -230,7 +231,7 @@ void matmul_backward(float* dinp, float* dweight, float* dbias,
     // this backward could be done in a single "round" of loops
     // but that doesn't afford an efficient parallelization strategy
     // backward into inp first, parallelize over B,T
-
+    #pragma omp parallel for collapse(2)
     for (int b = 0; b < B; b++) {
         for (int t = 0; t < T; t++) {
             const float* dout_bt = dout + b * T * OC + t * OC;
@@ -244,7 +245,7 @@ void matmul_backward(float* dinp, float* dweight, float* dbias,
             }
         }
     }
-
+    #pragma omp parallel for
     // backward into weight/bias, parallelize over output channels OC
     for (int o = 0; o < OC; o++) {
         for (int b = 0; b < B; b++) {
@@ -262,7 +263,7 @@ void matmul_backward(float* dinp, float* dweight, float* dbias,
     }
 
 }
-
+#endif
 void attention_forward(float* out, float* preatt, float* att,
                        float* inp,
                        int B, int T, int C, int NH) {
@@ -276,7 +277,7 @@ void attention_forward(float* out, float* preatt, float* att,
     int C3 = C*3;
     int hs = C / NH; // head size
     float scale = 1.0 / sqrtf(hs);
-
+    #pragma omp parallel for collapse(3)
     for (int b = 0; b < B; b++) {
         for (int t = 0; t < T; t++) {
             for (int h = 0; h < NH; h++) {
@@ -445,6 +446,7 @@ void softmax_forward(float* probs, float* logits, int B, int T, int V, int Vp) {
     // input: logits is (B,T,Vp) of the unnormalized log probabilities
     // Vp is the padded vocab size (for efficiency), V is the "real" vocab size
     // example: Vp is 50304 and V is 50257
+    #pragma omp parallel for collapse(2)
     for (int b = 0; b < B; b++) {
         for (int t = 0; t < T; t++) {
             // probs <- softmax(logits)
